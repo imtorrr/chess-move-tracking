@@ -14,4 +14,7 @@ dependencies = [
     "ultralytics>=8.3.217",
     "python-chess>=1.999",
     "labelimg>=1.8.6",
+    "albumentations>=2.0.8",
+    "gdown",
+    "tensorboard",
 ]

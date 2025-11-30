@@ -31,7 +31,7 @@ class ChessBoard:
         self.model = YOLO(self.model_path)
         
     def find_board2(self, frame):
-        for angle in [-99, cv2.ROTATE_90_CLOCKWISE, cv2.ROTATE_90_COUNTERCLOCKWISE, cv2.ROTATE_180]:
+        for angle in [-99, cv2.ROTATE_90_CLOCKWISE, cv2.ROTATE_90_COUNTERCLOCKWISE]:
             frame_ = frame.copy()
             if angle == -99:
                 pass
@@ -90,7 +90,7 @@ class ChessBoard:
         """
         Detects potential corners of chessboard squares using a YOLO model.
         """
-        results = self.model.predict(frame, save=False, verbose=False)
+        results = self.model.predict(frame, save=False, verbose=False, device="mps")
         self.centers = []
         for x1, y1, x2, y2 in results[0].boxes.xyxy.cpu().numpy():
             xc = 0.5 * (x1 + x2)
@@ -213,10 +213,10 @@ class ChessBoard:
         Determines the board's orientation by checking the corners.
         """
         corners = {
+            "bottom_left": (7, 0),
             "bottom_right": (7, 7),
             "top_left": (0, 0),
             "top_right": (0, 7),
-            "bottom_left": (7, 0),
         }
         for name, (row, col) in corners.items():
             uv = self.project_rc_center(row, col)
@@ -227,8 +227,8 @@ class ChessBoard:
             ]
             if corner_cell_img.size == 0:
                 continue
-            
             gray = cv2.cvtColor(corner_cell_img, cv2.COLOR_BGR2GRAY)
+            gray = cv2.resize(gray, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
             cell_id = detect_orientation(gray)
             if cell_id:
                 self.orientation = f"{cell_id}_{name}"
@@ -365,8 +365,8 @@ class ChessBoard:
 
 
 def main():
-    # cap = cv2.VideoCapture("data/2_Move_rotate_student.mp4")
-    cap = cv2.VideoCapture("data/2_move_student.mp4")
+    cap = cv2.VideoCapture("data/2_Move_rotate_student.mp4")
+    # cap = cv2.VideoCapture("data/2_move_student.mp4")
     ok, frame = cap.read()
     cap.release()
     if not ok:

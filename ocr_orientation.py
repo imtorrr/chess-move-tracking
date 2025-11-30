@@ -13,7 +13,7 @@ def detect_orientation(image_array: np.ndarray) -> str:
         A string indicating the orientation (e.g., "a1_bottom_left", "h1_bottom_left",
         "a8_bottom_left", "h8_bottom_left"), or "unknown" if not detected.
     """
-    reader = easyocr.Reader(['en'])
+    reader = easyocr.Reader(['en'], gpu=False)
     results = reader.readtext(image_array)
 
     # Store detected numbers and letters with their bounding box centers

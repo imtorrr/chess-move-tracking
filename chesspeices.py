@@ -2,25 +2,30 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 from chessboard import ChessBoard
+import torch
+
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 class ChessPieces:
-    def __init__(self, model_path="weight/chess-piece-yolo11m.pt"):
+    # def __init__(self, model_path="weights/chess-piece-yolo11l.pt"):
+    def __init__(self, model_path="weights/chess-piece-yolo11l-v2.pt"):
         self.model = YOLO(model_path)
     
     def detect_frame(self, frame, return_plot=False, board: ChessBoard | None = None):
         if return_plot:
             draw_frame = frame.copy()
         
-        results = self.model.predict(frame, save=False, verbose=False, agnostic_nms=True)
+        results = self.model.track(frame, save=False, verbose=False, agnostic_nms=True, device=device, persist=True, iou=0.7)
+
         
         board_idx = np.zeros((8, 8), dtype=int) - 1
         confidence_map = np.zeros((8, 8), dtype=float)
 
         for box in results[0].boxes:
             confidence = float(box.conf)
-            x1, y1, x2, y2 = map(int, box.xyxy[0])
-            xc, yc = ((x1 + x2) // 2, y2) # center at bottom
-
+            x, y, w, h = map(int, box.xywh[0])
+            xc, yc = (int(x), int(y + 0.25 * h)) # center at bottom
+            cv2.circle(draw_frame, (xc, yc), 5, (255, 0, 255), -1)
             if board is not None and board.H is not None:
                 r, c = board.project_xy_to_rc(xc, yc)
                 if r is not None and 0 <= r < 8 and 0 <= c < 8:
@@ -36,7 +41,7 @@ class ChessPieces:
                         uv = board.project_rc_center(r, c)
                         if uv is not None:
                             u, v = map(int, uv)
-                            cv2.circle(draw_frame, (u, v), 5, (0, 0, 255), -1)
+                            
                             cv2.putText(draw_frame, label, (u + 5, v - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
 
         if return_plot:
