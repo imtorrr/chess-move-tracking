@@ -126,8 +126,7 @@ if __name__ == "__main__":
                     # look for person
                     found_person = False
                     results = person_detector.predict(
-                        frame, save=False, verbose=False, device=0
-                    )
+                        frame, save=False, verbose=False, device="mps")
                     for box in results[0].boxes:
                         person = person_detector.names[int(box.cls)]
                         if person == "person":

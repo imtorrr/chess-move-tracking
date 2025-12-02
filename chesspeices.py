@@ -4,11 +4,11 @@ from ultralytics import YOLO
 from chessboard import ChessBoard
 import torch
 
-device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'mps')
 
 class ChessPieces:
     # def __init__(self, model_path="weights/chess-piece-yolo11l.pt"):
-    def __init__(self, model_path="weights/chess-piece-yolo11l-v2.pt"):
+    def __init__(self, model_path="weights/chess-piece-yolo11l.pt"):
         self.model = YOLO(model_path)
     
     def detect_frame(self, frame, return_plot=False, board: ChessBoard | None = None):
