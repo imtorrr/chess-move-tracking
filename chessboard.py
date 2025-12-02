@@ -4,6 +4,12 @@ from ultralytics import YOLO
 from scipy.spatial import Delaunay
 from sklearn.cluster import DBSCAN
 from ocr_orientation import detect_orientation
+import torch
+device = torch.device(
+    "cuda" if torch.cuda.is_available() 
+    else "mps" if torch.backends.mps.is_available() 
+    else "cpu"
+)
 
 
 class ChessBoard:
@@ -90,7 +96,7 @@ class ChessBoard:
         """
         Detects potential corners of chessboard squares using a YOLO model.
         """
-        results = self.model.predict(frame, save=False, verbose=False, device="mps")
+        results = self.model.predict(frame, save=False, verbose=False, device=device)
         self.centers = []
         for x1, y1, x2, y2 in results[0].boxes.xyxy.cpu().numpy():
             xc = 0.5 * (x1 + x2)

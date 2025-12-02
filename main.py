@@ -3,63 +3,35 @@ import cv2
 import joblib
 import os
 import numpy as np
-from chesspeices import ChessPieces
+from chesspieces import ChessPieces
 from board_perception import BoardPerception
 from ultralytics import YOLO
 import chess
 import pandas as pd
+import torch
 
+# Select the best available device
+device = torch.device(
+    "cuda" if torch.cuda.is_available() 
+    else "mps" if torch.backends.mps.is_available() 
+    else "cpu"
+)
 
-def pad_image_to_target_resolution(image, target_width, target_height, border_color=(0, 0, 0)):
-    """
-    Pads an image to a target resolution, centering the original image.
-
-    Args:
-        image (numpy.ndarray): The input image (BGR format).
-        target_width (int): The desired width of the padded image.
-        target_height (int): The desired height of the padded image.
-        border_color (tuple): The color of the padding (BGR format). Default is black.
-
-    Returns:
-        numpy.ndarray: The padded image.
-    """
-    h, w = image.shape[:2]
-
-    # Calculate padding amounts
-    diff_vert = target_height - h
-    pad_top = diff_vert // 2
-    pad_bottom = diff_vert - pad_top
-
-    diff_hori = target_width - w
-    pad_left = diff_hori // 2
-    pad_right = diff_hori - pad_left
-
-    # Apply padding
-    padded_image = cv2.copyMakeBorder(
-        image,
-        pad_top,
-        pad_bottom,
-        pad_left,
-        pad_right,
-        cv2.BORDER_CONSTANT,
-        value=border_color
-    )
-    return padded_image
 
 if __name__ == "__main__":
     video_paths = [
-        # "data/2_move_student.mp4",
-        # "data/2_Move_rotate_student.mp4",
-        # "data/4_Move_studet.mp4",
-        # "data/6_Move_student.mp4",
-        # "data/8_Move_student.mp4",
+        "data/videos/2_move_student.mp4",
+        "data/videos/2_Move_rotate_student.mp4",
+        "data/videos/4_Move_studet.mp4",
+        "data/videos/6_Move_student.mp4",
+        "data/videos/8_Move_student.mp4",
         "data/videos/Bonus Long Video Label.mp4",
     ]
     output = []
     for video_path in video_paths:
         filename = os.path.splitext(os.path.basename(video_path))[0]
-        cache_board_path = f"stubs/{filename}-board.joblib"
-        cache_history_path = f"stubs/{filename}-history.joblib"
+        cache_board_path = f"stubs/{filename}.board.joblib"
+        cache_history_path = f"stubs/{filename}.history.joblib"
 
         board = None
         # Step 1: Detect board orientation, files and ranks
@@ -75,14 +47,14 @@ if __name__ == "__main__":
                 if not ret:
                     print("Can't receive frame (stream end?). Exiting ...")
                     break
-                frame = pad_image_to_target_resolution(frame, 1080, 1920)
+                # frame = pad_image_to_target_resolution(frame, 1080, 1920)
                 board = ChessBoard()
                 if board.find_board2(frame):
                     print(f"Board found with orientation: {board.orientation}")
                     os.makedirs(
                         os.path.dirname(cache_board_path), exist_ok=True
                     )
-                    # joblib.dump(board, cache_board_path)
+                    joblib.dump(board, cache_board_path)
                     print(f"Board cached to {cache_board_path}")
                     break
                 else:
@@ -116,7 +88,6 @@ if __name__ == "__main__":
                         break
                     if board.rotation is not None:
                         frame = cv2.rotate(frame, board.rotation)
-                    frame = pad_image_to_target_resolution(frame, 1080, 1920)
                     i += 1
 
                     if i % 3 != 0:
@@ -126,7 +97,7 @@ if __name__ == "__main__":
                     # look for person
                     found_person = False
                     results = person_detector.predict(
-                        frame, save=False, verbose=False, device="mps")
+                        frame, save=False, verbose=False, device=device)
                     for box in results[0].boxes:
                         person = person_detector.names[int(box.cls)]
                         if person == "person":
@@ -303,9 +274,7 @@ if __name__ == "__main__":
                         "is_promotion": found_move.promotion is not None,
                     }
                     moves.append((found_move, detected_turn))
-                print(move_data)
-                if not move_data:
-                    import pdb;pdb.set_trace()
+                    
         for i in range(len(moves) - 1):
             move_curr, turn_curr = moves[i]
             if move_curr is not None and turn_curr is not None:
@@ -350,7 +319,9 @@ if __name__ == "__main__":
         output.append(pgn_string.strip())
     filenames = [ os.path.basename(video_path) for video_path in video_paths]
     df = pd.DataFrame({"row_id": filenames, "output": output})
-    df.to_csv("result.csv", index=False)
+    
+    os.makedirs("results", exist_ok=True)
+    df.to_csv("results/output.csv", index=False)
         # for move, turn in legal_moves:
         #     board_ini.turn = turn
         #     san = board_ini.san(move)
