@@ -1,19 +1,29 @@
 import cv2
 import numpy as np
-from ultralytics import YOLO
+import torch
 from scipy.spatial import Delaunay
 from sklearn.cluster import DBSCAN
+from ultralytics import YOLO
+
 from ocr_orientation import detect_orientation
-import torch
+
 device = torch.device(
-    "cuda" if torch.cuda.is_available() 
-    else "mps" if torch.backends.mps.is_available() 
+    "cuda"
+    if torch.cuda.is_available()
+    else "mps"
+    if torch.backends.mps.is_available()
     else "cpu"
 )
 
 
 class ChessBoard:
-    def __init__(self, model_path="weights/xcorners-yolo11n.pt"):
+    def __init__(self, model_path: str = "weights/xcorners-yolo11n.pt"):
+        """
+        Initializes the ChessBoard object and loads the YOLO model.
+
+        Args:
+            model_path: The path to the YOLO model file.
+        """
         self.model_path = model_path
         self.model = YOLO(self.model_path)
         self.centers = []
@@ -24,19 +34,40 @@ class ChessBoard:
         self.orientation = "unknown"
         self.rotation = None
 
-    def __getstate__(self):
+    def __getstate__(self) -> dict:
+        """
+        Prepares the object for pickling, excluding the non-serializable model.
+
+        Returns:
+            The object's state dictionary.
+        """
         state = self.__dict__.copy()
         # Don't pickle the model
-        if 'model' in state:
-            del state['model']
+        if "model" in state:
+            del state["model"]
         return state
 
-    def __setstate__(self, state):
+    def __setstate__(self, state: dict):
+        """
+        Restores the object from a pickled state and re-initializes the model.
+
+        Args:
+            state: The object's state dictionary.
+        """
         self.__dict__.update(state)
         # Re-create the model
         self.model = YOLO(self.model_path)
-        
-    def find_board2(self, frame):
+
+    def find_board_with_rotation_correction(self, frame: np.ndarray) -> bool:
+        """
+        Attempts to find the board, trying different rotations if the initial attempt fails.
+
+        Args:
+            frame: The input image frame.
+
+        Returns:
+            True if the board is found, False otherwise.
+        """
         for angle in [-99, cv2.ROTATE_90_CLOCKWISE, cv2.ROTATE_90_COUNTERCLOCKWISE]:
             frame_ = frame.copy()
             if angle == -99:
@@ -44,17 +75,21 @@ class ChessBoard:
             else:
                 frame_ = cv2.rotate(frame_, angle)
                 self.rotation = angle
-                
+
             if self.find_board(frame_):
                 return True
-            
-        return False 
-            
-            
 
-    def find_board(self, frame):
+        return False
+
+    def find_board(self, frame: np.ndarray) -> bool:
         """
-        Main method to find the chessboard, estimate homography, and determine orientation.
+        Finds the chessboard, estimates homography, and determines orientation.
+
+        Args:
+            frame: The input image frame.
+
+        Returns:
+            True if the board is found successfully, False otherwise.
         """
         # Try rotating if detection fails
         # for angle in [
@@ -75,10 +110,7 @@ class ChessBoard:
         self._find_quads()
         self._group_quads_into_rows()
 
-        if (
-            not self.grouped_rows
-            or sum(len(row) for row in self.grouped_rows) < 4
-        ):
+        if not self.grouped_rows or sum(len(row) for row in self.grouped_rows) < 4:
             print("Failed to group corners into rows.")
             return False
 
@@ -92,9 +124,12 @@ class ChessBoard:
             return False
         return True
 
-    def _detect_corners(self, frame):
+    def _detect_corners(self, frame: np.ndarray):
         """
         Detects potential corners of chessboard squares using a YOLO model.
+
+        Args:
+            frame: The input image frame.
         """
         results = self.model.predict(frame, save=False, verbose=False, device=device)
         self.centers = []
@@ -103,10 +138,8 @@ class ChessBoard:
             yc = 0.5 * (y1 + y2)
             self.centers.append([xc, yc])
 
-    def _find_quads(self):
-        """
-        Finds quadrilaterals from the detected corners using Delaunay triangulation.
-        """
+    def _find_quads(self) -> None:
+        """Finds quadrilaterals from the detected corners using Delaunay triangulation."""
         pts = np.asarray(self.centers, dtype=np.float32)
         if len(pts) < 3:
             return
@@ -155,10 +188,8 @@ class ChessBoard:
             cy = np.mean(q[:, 1])
             self.quad_centers.append((i, cx, cy))
 
-    def _group_quads_into_rows(self):
-        """
-        Groups the found quadrilaterals into rows based on their y-coordinates.
-        """
+    def _group_quads_into_rows(self) -> None:
+        """Groups the found quadrilaterals into rows based on their y-coordinates."""
         if not self.quad_centers:
             self.grouped_rows = []
             return
@@ -183,10 +214,8 @@ class ChessBoard:
             grouped.append(row)
         self.grouped_rows = grouped
 
-    def _estimate_homography(self):
-        """
-        Estimates the homography matrix from the grouped rows of quad centers.
-        """
+    def _estimate_homography(self) -> None:
+        """Estimates the homography matrix from the grouped rows of quad centers."""
         rc_pts, img_pts = [], []
         for r, row in enumerate(self.grouped_rows, start=1):
             for c, item in enumerate(row, start=1):
@@ -206,7 +235,6 @@ class ChessBoard:
             xy, img_pts, method=cv2.RANSAC, ransacReprojThreshold=2.0
         )
         self.H = H
-        
 
         try:
             self.H_inv = np.linalg.inv(self.H)
@@ -214,9 +242,12 @@ class ChessBoard:
             print("Error: Homography matrix is not invertible.")
             self.H_inv = None
 
-    def _determine_orientation(self, frame):
+    def _determine_orientation(self, frame: np.ndarray):
         """
         Determines the board's orientation by checking the corners.
+
+        Args:
+            frame: The input image frame.
         """
         corners = {
             "bottom_left": (7, 0),
@@ -240,20 +271,36 @@ class ChessBoard:
                 self.orientation = f"{cell_id}_{name}"
                 return
 
+    def project_rc_center(self, row: int, col: int) -> np.ndarray | None:
+        """
+        Projects a single (row, col) to image coordinates.
 
-    def project_rc_center(self, row, col):
-        """Projects a single (row, col) to image coordinates."""
+        Args:
+            row: The row of the square.
+            col: The column of the square.
+
+        Returns:
+            A NumPy array with the (u, v) image coordinates, or None if homography is not set.
+        """
         if self.H is None:
             return None
         xy = np.array([[col, row]], np.float32).reshape(-1, 1, 2)
         uv = cv2.perspectiveTransform(xy, self.H).reshape(-1, 2)
         return uv[0]
 
-    def project_xy_to_rc(self, x, y):
-        """Projects a single (x, y) image coordinate to (row, col)."""
+    def project_xy_to_rc(self, x: float, y: float) -> tuple[int, int] | None:
+        """
+        Projects a single (x, y) image coordinate to (row, col) board coordinates.
+
+        Args:
+            x: The x-coordinate in the image.
+            y: The y-coordinate in the image.
+
+        Returns:
+            A tuple with the (row, col) board coordinates, or None if inverse homography is not set.
+        """
         if self.H_inv is None:
             return None
-
 
         uv = np.array([[x, y]], np.float32).reshape(-1, 1, 2)
         rc = cv2.perspectiveTransform(uv, self.H_inv).reshape(-1, 2)
@@ -261,12 +308,25 @@ class ChessBoard:
         row, col = rc[0, 1], rc[0, 0]
         return int(round(row)), int(round(col))
 
-    def get_pgn_from_rc(self, r, c, rows=8, cols=8):
-        """Calculates PGN notation from row and column based on orientation."""
+    def get_pgn_from_rc(
+        self, r: int, c: int, rows: int = 8, cols: int = 8
+    ) -> tuple[str, str]:
+        """
+        Calculates PGN notation from row and column based on the board's orientation.
+
+        Args:
+            r: The row index.
+            c: The column index.
+            rows: The total number of rows on the board.
+            cols: The total number of columns on the board.
+
+        Returns:
+            A tuple containing the PGN file and rank.
+        """
         fallback = (f"r{r}", f"c{c}")
         if self.orientation == "unknown":
             return fallback
-        
+
         parts = self.orientation.split("_")
         text, corner_name = parts[0], "_".join(parts[1:])
         if len(text) != 2:
@@ -289,15 +349,23 @@ class ChessBoard:
             return fallback
 
         pgn_col = (
-            chr(ord("a") + c)
-            if file_increasing
-            else chr(ord("a") + (cols - 1 - c))
+            chr(ord("a") + c) if file_increasing else chr(ord("a") + (cols - 1 - c))
         )
         pgn_row = str(1 + r) if rank_increasing else str(rows - r)
         return pgn_col, pgn_row
 
-    def draw_projected_centers(self, frame, rows=8, cols=8, color=(0, 0, 255)):
-        """Draws projected centers and their PGN labels on the frame."""
+    def draw_projected_centers(
+        self, frame: np.ndarray, rows: int = 8, cols: int = 8, color: tuple[int, int, int] = (0, 0, 255)
+    ):
+        """
+        Draws projected centers and their PGN labels on the frame.
+
+        Args:
+            frame: The image frame to draw on.
+            rows: The number of rows to draw.
+            cols: The number of columns to draw.
+            color: The color of the circles and text.
+        """
         if self.H is None:
             return
         uv = self._project_rc_centers(rows, cols)
@@ -318,9 +386,27 @@ class ChessBoard:
                 )
 
     def draw_projected_grid(
-        self, frame, rmin, rmax, cmin, cmax, color=(0, 255, 255), thick=1
+        self,
+        frame: np.ndarray,
+        rmin: int,
+        rmax: int,
+        cmin: int,
+        cmax: int,
+        color: tuple[int, int, int] = (0, 255, 255),
+        thick: int = 1,
     ):
-        """Draws the projected grid lines on the frame."""
+        """
+        Draws the projected grid lines on the frame.
+
+        Args:
+            frame: The image frame to draw on.
+            rmin: The minimum row index.
+            rmax: The maximum row index.
+            cmin: The minimum column index.
+            cmax: The maximum column index.
+            color: The color of the grid lines.
+            thick: The thickness of the grid lines.
+        """
         if self.H is None:
             return
 
@@ -330,17 +416,26 @@ class ChessBoard:
             return uv
 
         for c in range(cmin, cmax + 1):
-            p = np.array([[rmin, c], [rmax, c]], np.float32) -0.5
+            p = np.array([[rmin, c], [rmax, c]], np.float32) - 0.5
             u = warp_rc(p)
             cv2.line(frame, tuple(u[0]), tuple(u[1]), color, thick, cv2.LINE_AA)
 
         for r in range(rmin, rmax + 1):
-            p = np.array([[r, cmin], [r, cmax]], np.float32) -0.5
+            p = np.array([[r, cmin], [r, cmax]], np.float32) - 0.5
             u = warp_rc(p)
             cv2.line(frame, tuple(u[0]), tuple(u[1]), color, thick, cv2.LINE_AA)
 
-    def _project_rc_centers(self, rows, cols):
-        """Projects all ideal grid centers to image coordinates."""
+    def _project_rc_centers(self, rows: int, cols: int) -> np.ndarray | None:
+        """
+        Projects all ideal grid centers to image coordinates.
+
+        Args:
+            rows: The number of rows.
+            cols: The number of columns.
+
+        Returns:
+            A NumPy array with the (u, v) image coordinates for each center, or None if homography is not set.
+        """
         if self.H is None:
             return None
         rr, cc = np.mgrid[0:rows, 0:cols].astype(np.float32)
@@ -350,12 +445,35 @@ class ChessBoard:
         return uv.reshape(rows, cols, 2)
 
     @staticmethod
-    def _edge_len_sq(p, q):
+    def _edge_len_sq(p: np.ndarray, q: np.ndarray) -> float:
+        """
+        Calculates the squared Euclidean distance between two points.
+
+        Args:
+            p: The first point.
+            q: The second point.
+
+        Returns:
+            The squared distance.
+        """
         d = p - q
         return float(d[0] * d[0] + d[1] * d[1])
 
     @staticmethod
-    def _longest_edge_local(p0, p1, p2):
+    def _longest_edge_local(
+        p0: np.ndarray, p1: np.ndarray, p2: np.ndarray
+    ) -> tuple[int, int]:
+        """
+        Identifies the longest edge within a triangle.
+
+        Args:
+            p0: The first vertex of the triangle.
+            p1: The second vertex of the triangle.
+            p2: The third vertex of the triangle.
+
+        Returns:
+            A tuple with the indices of the vertices of the longest edge.
+        """
         e01 = ChessBoard._edge_len_sq(p0, p1)
         e12 = ChessBoard._edge_len_sq(p1, p2)
         e20 = ChessBoard._edge_len_sq(p2, p0)
@@ -364,20 +482,30 @@ class ChessBoard:
         return lens[-1][1]
 
     @staticmethod
-    def _order_ccw(poly_xy):
+    def _order_ccw(poly_xy: np.ndarray) -> np.ndarray:
+        """
+        Orders the vertices of a polygon in a counter-clockwise direction.
+
+        Args:
+            poly_xy: A NumPy array of polygon vertices.
+
+        Returns:
+            A NumPy array of indices that sort the vertices in counter-clockwise order.
+        """
         c = poly_xy.mean(axis=0)
         ang = np.arctan2(poly_xy[:, 1] - c[1], poly_xy[:, 0] - c[0])
         return np.argsort(ang)
 
 
-def main():
+def main() -> None:
+    """Main function to demonstrate chessboard detection on a sample video frame."""
     cap = cv2.VideoCapture("data/2_Move_rotate_student.mp4")
     # cap = cv2.VideoCapture("data/2_move_student.mp4")
     ok, frame = cap.read()
     cap.release()
     if not ok:
         raise SystemExit("Could not read frame")
-    
+
     board = ChessBoard()
     draw_frame = frame.copy()
     if board.find_board2(frame):
@@ -395,7 +523,6 @@ def main():
     cv2.imshow("Chessboard Detection", draw_frame)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
-    
 
 
 if __name__ == "__main__":

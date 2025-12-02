@@ -1,8 +1,9 @@
 import cv2
 import numpy as np
-from ultralytics import YOLO
-from chessboard import ChessBoard
 import torch
+from ultralytics import YOLO
+
+from chessboard import ChessBoard
 
 device = torch.device(
     "cuda"
@@ -14,12 +15,32 @@ device = torch.device(
 
 
 class ChessPieces:
-    def __init__(self, model_path="weights/chess-piece-yolo11l-tuned.pt"):
+    def __init__(self, model_path: str = "weights/chess-piece-yolo11l-tuned.pt"):
+        """
+        Initializes the ChessPieces object with a YOLO model for piece detection.
+
+        Args:
+            model_path: The path to the YOLO model file.
+        """
         self.model = YOLO(model_path)
 
     def detect_frame(
-        self, frame, return_plot=False, board: ChessBoard | None = None
-    ):
+        self,
+        frame: np.ndarray,
+        return_plot: bool = False,
+        board: ChessBoard | None = None,
+    ) -> np.ndarray | tuple[np.ndarray, np.ndarray]:
+        """
+        Detects chess pieces in a given frame and maps them to board positions.
+
+        Args:
+            frame: The input image frame.
+            return_plot: Whether to return a frame with detections drawn on it.
+            board: A ChessBoard object for projecting piece coordinates.
+
+        Returns:
+            An 8x8 NumPy array representing the board, or a tuple with the board and the plotted frame.
+        """
         if return_plot:
             draw_frame = frame.copy()
 
@@ -71,7 +92,17 @@ class ChessPieces:
             return board_idx, draw_frame
         return board_idx
 
-    def board_to_fen(self, board_idx, chessboard_obj):
+    def board_to_fen(self, board_idx: np.ndarray, chessboard_obj: ChessBoard) -> str:
+        """
+        Converts the detected board configuration into a FEN (Forsyth-Edwards Notation) string.
+
+        Args:
+            board_idx: An 8x8 NumPy array with class indices of the detected pieces.
+            chessboard_obj: The ChessBoard object used for coordinate conversions.
+
+        Returns:
+            The piece placement part of a FEN string.
+        """
         # Define the mapping from model names to FEN characters
         piece_id_to_fen_char = {
             "black-bishop": "b",
@@ -89,9 +120,7 @@ class ChessPieces:
         }
         # Initialize a 2D array to hold FEN characters, ordered by FEN rank (8-1) and FEN file (a-h)
         board_chars = [["" for _ in range(8)] for _ in range(8)]
-        for r_idx in range(
-            8
-        ):  # Iterate through the board_idx array's rows (0-7)
+        for r_idx in range(8):  # Iterate through the board_idx array's rows (0-7)
             for c_idx in range(
                 8
             ):  # Iterate through the board_idx array's columns (0-7)

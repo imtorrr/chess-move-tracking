@@ -1,1 +1,1 @@
-uvx ruff check --fix 
+uvx ruff check --fix
