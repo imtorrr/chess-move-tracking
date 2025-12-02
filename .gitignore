@@ -18,13 +18,12 @@ training_data/
 result/
 stubs/
 notebooks/
-!weights/chess-piece*.pt
-!weights/xcorners*.pt
 *.pt
 *.pth
 *.joblib
 *.mp4
 *.zip
 
+!weights/*.pt
 # Notebooks
 .ipynb_checkpoints
