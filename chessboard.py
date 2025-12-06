@@ -137,6 +137,9 @@ class ChessBoard:
             xc = 0.5 * (x1 + x2)
             yc = 0.5 * (y1 + y2)
             self.centers.append([xc, yc])
+            # cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), (0, 0, 255), 2)
+            # cv2.circle(frame, (int(xc), int(yc)), 6, (0, 0, 0), 2)
+        return frame
 
     def _find_quads(self) -> None:
         """Finds quadrilaterals from the detected corners using Delaunay triangulation."""
@@ -266,6 +269,7 @@ class ChessBoard:
                 continue
             gray = cv2.cvtColor(corner_cell_img, cv2.COLOR_BGR2GRAY)
             gray = cv2.resize(gray, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
+            cv2.imshow("corners", gray)
             cell_id = detect_orientation(gray)
             if cell_id:
                 self.orientation = f"{cell_id}_{name}"
@@ -323,7 +327,7 @@ class ChessBoard:
         Returns:
             A tuple containing the PGN file and rank.
         """
-        fallback = (f"r{r}", f"c{c}")
+        fallback = (f"({r}",f",{c})")
         if self.orientation == "unknown":
             return fallback
 
@@ -379,9 +383,9 @@ class ChessBoard:
                     f"{pgn_col}{pgn_row}",
                     (int(x) + 5, int(y) - 5),
                     cv2.FONT_HERSHEY_SIMPLEX,
-                    0.5,
+                    0.7,
                     color,
-                    1,
+                    2,
                     cv2.LINE_AA,
                 )
 
@@ -424,6 +428,86 @@ class ChessBoard:
             p = np.array([[r, cmin], [r, cmax]], np.float32) - 0.5
             u = warp_rc(p)
             cv2.line(frame, tuple(u[0]), tuple(u[1]), color, thick, cv2.LINE_AA)
+
+    def draw_delaunay_visualization(self, frame: np.ndarray) -> np.ndarray:
+        """
+        Draws the Delaunay triangulation on the frame.
+        Highlights the longest edge of each triangle in RED, others in GREEN.
+        """
+        vis_frame = frame.copy()
+        
+        # Ensure we have points
+        if not hasattr(self, 'centers') or len(self.centers) < 3:
+            print("Not enough points to triangulate.")
+            return vis_frame
+
+        # Convert centers to numpy array of integers for cv2 drawing
+        pts = np.array(self.centers, dtype=np.int32)
+        
+        # Generate Delaunay Triangulation
+        tri = Delaunay(pts)
+
+        # Iterate through every triangle (simplex)
+        for simplex in tri.simplices:
+            # Get the 3 points of the triangle
+            pt1 = pts[simplex[0]]
+            pt2 = pts[simplex[1]]
+            pt3 = pts[simplex[2]]
+
+            # Calculate squared distances for edges (avoiding sqrt for speed)
+            # Edge 1: pt1 -> pt2
+            dist1 = np.sum((pt1 - pt2) ** 2)
+            # Edge 2: pt2 -> pt3
+            dist2 = np.sum((pt2 - pt3) ** 2)
+            # Edge 3: pt3 -> pt1
+            dist3 = np.sum((pt3 - pt1) ** 2)
+
+            # Find maximum distance to identify the longest edge
+            max_dist = max(dist1, dist2, dist3)
+
+            # Draw Edge 1 (pt1 -> pt2)
+            color = (0, 0, 255) if dist1 == max_dist else (0, 255, 0) # Red if longest, else Green
+            thickness = 2 if dist1 == max_dist else 2
+            cv2.line(vis_frame, tuple(pt1), tuple(pt2), color, thickness)
+
+            # Draw Edge 2 (pt2 -> pt3)
+            color = (0, 0, 255) if dist2 == max_dist else (0, 255, 0)
+            thickness = 2 if dist2 == max_dist else 2
+            cv2.line(vis_frame, tuple(pt2), tuple(pt3), color, thickness)
+
+            # Draw Edge 3 (pt3 -> pt1)
+            color = (0, 0, 255) if dist3 == max_dist else (0, 255, 0)
+            thickness = 2 if dist3 == max_dist else 2
+            cv2.line(vis_frame, tuple(pt3), tuple(pt1), color, thickness)
+
+        # Optional: Draw the corners as dots on top
+        for pt in pts:
+            cv2.circle(vis_frame, tuple(pt), 6, (0, 0, 0), -1) # Cyan dots
+
+        return vis_frame
+
+    def draw_quad_centers(self, frame: np.ndarray) -> np.ndarray:
+        vis_frame = frame.copy()
+        if not hasattr(self, 'grouped_rows'):
+            print("Not have grouped_rows.")
+            return vis_frame
+        
+        for i, row in enumerate(self.grouped_rows, start=1):
+            for j, (_, cx, cy) in enumerate(row, start=1):
+                cv2.circle(vis_frame, (int(cx), int(cy)), 6, (0, 0, 255), -1)
+                cv2.putText(
+                    vis_frame,
+                    f"({i},{j})",
+                    (int(cx) + 5, int(cy) - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.7,
+                    (255, 0, 0),
+                    2,
+                    cv2.LINE_AA,
+                )
+        
+        return vis_frame
+        
 
     def _project_rc_centers(self, rows: int, cols: int) -> np.ndarray | None:
         """
@@ -499,7 +583,7 @@ class ChessBoard:
 
 def main() -> None:
     """Main function to demonstrate chessboard detection on a sample video frame."""
-    cap = cv2.VideoCapture("data/2_Move_rotate_student.mp4")
+    cap = cv2.VideoCapture("data/videos/2_move_student.mp4")
     # cap = cv2.VideoCapture("data/2_move_student.mp4")
     ok, frame = cap.read()
     cap.release()
@@ -507,19 +591,21 @@ def main() -> None:
         raise SystemExit("Could not read frame")
 
     board = ChessBoard()
-    draw_frame = frame.copy()
-    if board.find_board2(frame):
-        print(f"Board found with orientation: {board.orientation}")
+    if board.find_board_with_rotation_correction(frame):
+        draw_frame = frame.copy()
+    #     print(f"Board found with orientation: {board.orientation}")
         if board.rotation is not None:
             draw_frame = cv2.rotate(draw_frame, board.rotation)
-        # Draw the results
-        board.draw_projected_centers(draw_frame, 8, 8, color=(0, 255, 0))
-        board.draw_projected_grid(draw_frame, 0, 8, 0, 8, color=(0, 255, 255))
-    else:
-        print("Could not find chessboard.")
-        # Draw detected corners even if board not found
-        for xc, yc in board.centers:
-            cv2.circle(draw_frame, (int(xc), int(yc)), 3, (0, 0, 255), -1)
+        # draw_frame = board.draw_delaunay_visualization(draw_frame)
+        # draw_frame = board.draw_quad_centers(draw_frame)
+    #     # Draw the results
+        # board.draw_projected_grid(draw_frame, 0, 8, 0, 8, color=(0, 0, 0), thick=2)
+        # board.draw_projected_centers(draw_frame, 8, 8, color=(0, 0, 255))
+    # else:
+    #     print("Could not find chessboard.")
+    #     # Draw detected corners even if board not found
+    #     for xc, yc in board.centers:
+    #         cv2.circle(draw_frame, (int(xc), int(yc)), 3, (0, 0, 255), -1)
     cv2.imshow("Chessboard Detection", draw_frame)
     cv2.waitKey(0)
     cv2.destroyAllWindows()

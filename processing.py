@@ -108,7 +108,7 @@ def generate_fen_history(
                 frame, return_plot=False, board=board
             )
             fen_curr = chess_pieces_detector.board_to_fen(board_idx, board)
-            board_curr = chess.Board(fen_curr)
+            board_curr = chess.Board(fen_curr) # A chess library for Python
             if (
                 board_curr.is_valid()
                 or board_curr.status() == chess.STATUS_OPPOSITE_CHECK
@@ -242,7 +242,8 @@ def generate_pgn(history: list[str], legal_moves: list[tuple[chess.Move, bool]])
     ini_move, ini_turn = legal_moves[0]
     board_ini = chess.Board(history[0])
     board_ini.turn = ini_turn
-
+    pgn_string = board_ini.variation_san([ move for (move, _) in legal_moves])
+    print("board.variation_san success")
     pgn_string = ""
     n_move = 0
 
