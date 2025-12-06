@@ -57,7 +57,7 @@ def get_board_from_video(video_path: str, cache_path: str) -> ChessBoard | None:
 
 
 def generate_fen_history(
-    video_path: str, board: ChessBoard, cache_path: str
+    video_path: str, board: ChessBoard, cache_path: str, model_path: str, output_path: str | None = None,
 ) -> list[str]:
     """
     Generates a history of board states in FEN format from a video.
@@ -74,13 +74,25 @@ def generate_fen_history(
         print(f"Load cached history from {cache_path}")
         return joblib.load(cache_path)
 
-    chess_pieces_detector = ChessPieces()
+    chess_pieces_detector = ChessPieces(model_path=model_path)
     board_perceptor = BoardPerception(buffer_size=10)
     person_detector = YOLO("yolo11l.pt")
     history = []
 
     cap = cv2.VideoCapture(video_path)
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    out = None
+    if output_path is not None:
+        frame_rate = 30
+        frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        frame_size = (frame_width, frame_height)
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v') 
+
+        # Note: isColor is set to False because we are writing a grayscale video.
+        out = cv2.VideoWriter(output_path, fourcc, frame_rate, frame_size, isColor=True)
+
+        print(f"Writing video to {output_path} using 'mp4v' codec at {frame_rate} FPS...")
     i = 0
     while True:
         ret, frame = cap.read()
@@ -103,9 +115,11 @@ def generate_fen_history(
                 found_person = True
                 break
 
-        if not found_person:
-            board_idx, _ = chess_pieces_detector.detect_frame(
-                frame, return_plot=False, board=board
+        draw_frame = frame.copy()
+
+        if not found_person and board is not None:
+            board_idx, draw_frame = chess_pieces_detector.detect_frame(
+                frame, return_plot=True, board=board
             )
             fen_curr = chess_pieces_detector.board_to_fen(board_idx, board)
             board_curr = chess.Board(fen_curr) # A chess library for Python
@@ -123,13 +137,16 @@ def generate_fen_history(
                 fen_string = chess_pieces_detector.board_to_fen(stable_grid, board)
                 history.append(fen_string)
                 print(f"frame: {i}/{total_frames} (stable)")
-
         # Optional: display frame for debugging
-        # cv2.imshow("frame", frame)
-        # if cv2.waitKey(1) == ord("q"):
-        #     break
+        cv2.imshow("frame", draw_frame)
+        if out is not None:
+            out.write(draw_frame)
+        if cv2.waitKey(1) == ord("q"):
+            break
 
     cap.release()
+    if out is not None:
+        out.release()
     joblib.dump(history, cache_path)
     print(f"Save history to cached to {cache_path}")
     cv2.destroyAllWindows()
@@ -245,33 +262,38 @@ def generate_pgn(history: list[str], legal_moves: list[tuple[chess.Move, bool]])
     pgn_string = board_ini.variation_san([ move for (move, _) in legal_moves])
     print("board.variation_san success")
     pgn_string = ""
-    n_move = 0
+    try:
+        pgn_string = board_ini.variation_san([ move for (move, _) in legal_moves])
+        pgn_string = pgn_string.replace("...", "... ") # if black move first
+        print("board.variation_san success")
+    except chess.IllegalMoveError:
+        print("boarc.variation_san errors: fallback to my method")
+        n_move = 0
+        if not ini_turn:  # Black moves first
+            legal_moves.pop(0)
+            san = board_ini.san(ini_move)
+            board_ini.push(ini_move)
+            pgn_string = f"1... {san} "
+            n_move = 1
 
-    if not ini_turn:  # Black moves first
-        legal_moves.pop(0)
-        san = board_ini.san(ini_move)
-        board_ini.push(ini_move)
-        pgn_string = f"1... {san} "
-        n_move = 1
+        for i in range(0, len(legal_moves), 2):
+            n_move += 1
+            try:
+                white_move, _ = legal_moves[i]
+                san_white = board_ini.san(white_move)
+                board_ini.push(white_move)
 
-    for i in range(0, len(legal_moves), 2):
-        n_move += 1
-        try:
-            white_move, _ = legal_moves[i]
-            san_white = board_ini.san(white_move)
-            board_ini.push(white_move)
+                san_black = ""
+                if i + 1 < len(legal_moves):
+                    black_move, _ = legal_moves[i + 1]
+                    san_black = board_ini.san(black_move)
+                    board_ini.push(black_move)
 
-            san_black = ""
-            if i + 1 < len(legal_moves):
-                black_move, _ = legal_moves[i + 1]
-                san_black = board_ini.san(black_move)
-                board_ini.push(black_move)
-
-            pgn_string += f"{n_move}. {san_white} {san_black} "
-        except chess.IllegalMoveError:
-            print("Warning: Illegal move found during PGN generation. Skipping.")
-            continue
-        except IndexError:
-            pgn_string += f"{n_move}. {san_white} "
+                pgn_string += f"{n_move}. {san_white} {san_black} "
+            except chess.IllegalMoveError:
+                print("Warning: Illegal move found during PGN generation. Skipping.")
+                continue
+            except IndexError:
+                pgn_string += f"{n_move}. {san_white} "
 
     return pgn_string.strip()

@@ -20,7 +20,7 @@ if __name__ == "__main__":
         "data/videos/Bonus Long Video Label.mp4",
     ]
     all_pgns = []
-
+    model_path = "weights/chess-piece-yolo11l-tuned.pt"
     for video_path in video_paths:
         print(f"Processing video: {video_path}")
         filename = os.path.splitext(os.path.basename(video_path))[0]
@@ -35,7 +35,7 @@ if __name__ == "__main__":
             continue
 
         # Step 2: Generate FEN history from the video
-        history = generate_fen_history(video_path, board, cache_history_path)
+        history = generate_fen_history(video_path, board, cache_history_path, model_path, output_path=video_path.replace("data/videos", "results"))
         if not history:
             print(f"Could not generate FEN history for {video_path}. Skipping.")
             all_pgns.append("")
