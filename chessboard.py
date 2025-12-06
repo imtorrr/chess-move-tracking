@@ -355,7 +355,7 @@ class ChessBoard:
         return pgn_col, pgn_row
 
     def draw_projected_centers(
-        self, frame: np.ndarray, rows: int = 8, cols: int = 8, color: tuple[int, int, int] = (0, 0, 255)
+        self, frame: np.ndarray, rows: int = 8, cols: int = 8, color: tuple[int, int, int] = (0, 0, 0)
     ):
         """
         Draws projected centers and their PGN labels on the frame.
@@ -373,15 +373,24 @@ class ChessBoard:
             for c in range(cols):
                 x, y = uv[r, c]
                 pgn_col, pgn_row = self.get_pgn_from_rc(r, c, rows, cols)
-                cv2.circle(frame, (int(x), int(y)), 5, color, -1)
                 cv2.putText(
                     frame,
                     f"{pgn_col}{pgn_row}",
-                    (int(x) + 5, int(y) - 5),
+                    (int(x), int(y)),
                     cv2.FONT_HERSHEY_SIMPLEX,
-                    0.5,
-                    color,
-                    1,
+                    0.6,
+                    (0, 0, 0),
+                    4,
+                    cv2.LINE_AA,
+                )
+                cv2.putText(
+                    frame,
+                    f"{pgn_col}{pgn_row}",
+                    (int(x), int(y)),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.6,
+                    (255, 255, 255),
+                    2,
                     cv2.LINE_AA,
                 )
 
