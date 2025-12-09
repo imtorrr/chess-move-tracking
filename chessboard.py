@@ -68,7 +68,11 @@ class ChessBoard:
         Returns:
             True if the board is found, False otherwise.
         """
-        for angle in [-99, cv2.ROTATE_90_CLOCKWISE, cv2.ROTATE_90_COUNTERCLOCKWISE]:
+        for angle in [
+            -99,
+            cv2.ROTATE_90_CLOCKWISE,
+            cv2.ROTATE_90_COUNTERCLOCKWISE,
+        ]:
             frame_ = frame.copy()
             if angle == -99:
                 pass
@@ -110,7 +114,10 @@ class ChessBoard:
         self._find_quads()
         self._group_quads_into_rows()
 
-        if not self.grouped_rows or sum(len(row) for row in self.grouped_rows) < 4:
+        if (
+            not self.grouped_rows
+            or sum(len(row) for row in self.grouped_rows) < 4
+        ):
             print("Failed to group corners into rows.")
             return False
 
@@ -131,7 +138,9 @@ class ChessBoard:
         Args:
             frame: The input image frame.
         """
-        results = self.model.predict(frame, save=False, verbose=False, device=device)
+        results = self.model.predict(
+            frame, save=False, verbose=False, device=device
+        )
         self.centers = []
         for x1, y1, x2, y2 in results[0].boxes.xyxy.cpu().numpy():
             xc = 0.5 * (x1 + x2)
@@ -268,8 +277,9 @@ class ChessBoard:
             if corner_cell_img.size == 0:
                 continue
             gray = cv2.cvtColor(corner_cell_img, cv2.COLOR_BGR2GRAY)
-            gray = cv2.resize(gray, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
-            cv2.imshow("corners", gray)
+            gray = cv2.resize(
+                gray, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC
+            )
             cell_id = detect_orientation(gray)
             if cell_id:
                 self.orientation = f"{cell_id}_{name}"
@@ -327,7 +337,7 @@ class ChessBoard:
         Returns:
             A tuple containing the PGN file and rank.
         """
-        fallback = (f"({r}",f",{c})")
+        fallback = (f"({r}", f",{c})")
         if self.orientation == "unknown":
             return fallback
 
@@ -353,13 +363,19 @@ class ChessBoard:
             return fallback
 
         pgn_col = (
-            chr(ord("a") + c) if file_increasing else chr(ord("a") + (cols - 1 - c))
+            chr(ord("a") + c)
+            if file_increasing
+            else chr(ord("a") + (cols - 1 - c))
         )
         pgn_row = str(1 + r) if rank_increasing else str(rows - r)
         return pgn_col, pgn_row
 
     def draw_projected_centers(
-        self, frame: np.ndarray, rows: int = 8, cols: int = 8, color: tuple[int, int, int] = (0, 0, 0)
+        self,
+        frame: np.ndarray,
+        rows: int = 8,
+        cols: int = 8,
+        color: tuple[int, int, int] = (0, 0, 0),
     ):
         """
         Draws projected centers and their PGN labels on the frame.
@@ -444,15 +460,15 @@ class ChessBoard:
         Highlights the longest edge of each triangle in RED, others in GREEN.
         """
         vis_frame = frame.copy()
-        
+
         # Ensure we have points
-        if not hasattr(self, 'centers') or len(self.centers) < 3:
+        if not hasattr(self, "centers") or len(self.centers) < 3:
             print("Not enough points to triangulate.")
             return vis_frame
 
         # Convert centers to numpy array of integers for cv2 drawing
         pts = np.array(self.centers, dtype=np.int32)
-        
+
         # Generate Delaunay Triangulation
         tri = Delaunay(pts)
 
@@ -475,7 +491,9 @@ class ChessBoard:
             max_dist = max(dist1, dist2, dist3)
 
             # Draw Edge 1 (pt1 -> pt2)
-            color = (0, 0, 255) if dist1 == max_dist else (0, 255, 0) # Red if longest, else Green
+            color = (
+                (0, 0, 255) if dist1 == max_dist else (0, 255, 0)
+            )  # Red if longest, else Green
             thickness = 2 if dist1 == max_dist else 2
             cv2.line(vis_frame, tuple(pt1), tuple(pt2), color, thickness)
 
@@ -491,16 +509,16 @@ class ChessBoard:
 
         # Optional: Draw the corners as dots on top
         for pt in pts:
-            cv2.circle(vis_frame, tuple(pt), 6, (0, 0, 0), -1) # Cyan dots
+            cv2.circle(vis_frame, tuple(pt), 6, (0, 0, 0), -1)  # Cyan dots
 
         return vis_frame
 
     def draw_quad_centers(self, frame: np.ndarray) -> np.ndarray:
         vis_frame = frame.copy()
-        if not hasattr(self, 'grouped_rows'):
+        if not hasattr(self, "grouped_rows"):
             print("Not have grouped_rows.")
             return vis_frame
-        
+
         for i, row in enumerate(self.grouped_rows, start=1):
             for j, (_, cx, cy) in enumerate(row, start=1):
                 cv2.circle(vis_frame, (int(cx), int(cy)), 6, (0, 0, 255), -1)
@@ -514,9 +532,8 @@ class ChessBoard:
                     2,
                     cv2.LINE_AA,
                 )
-        
+
         return vis_frame
-        
 
     def _project_rc_centers(self, rows: int, cols: int) -> np.ndarray | None:
         """
@@ -602,14 +619,14 @@ def main() -> None:
     board = ChessBoard()
     if board.find_board_with_rotation_correction(frame):
         draw_frame = frame.copy()
-    #     print(f"Board found with orientation: {board.orientation}")
+        #     print(f"Board found with orientation: {board.orientation}")
         if board.rotation is not None:
             draw_frame = cv2.rotate(draw_frame, board.rotation)
         # draw_frame = board.draw_delaunay_visualization(draw_frame)
         # draw_frame = board.draw_quad_centers(draw_frame)
     #     # Draw the results
-        # board.draw_projected_grid(draw_frame, 0, 8, 0, 8, color=(0, 0, 0), thick=2)
-        # board.draw_projected_centers(draw_frame, 8, 8, color=(0, 0, 255))
+    # board.draw_projected_grid(draw_frame, 0, 8, 0, 8, color=(0, 0, 0), thick=2)
+    # board.draw_projected_centers(draw_frame, 8, 8, color=(0, 0, 255))
     # else:
     #     print("Could not find chessboard.")
     #     # Draw detected corners even if board not found
