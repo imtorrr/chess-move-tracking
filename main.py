@@ -71,10 +71,10 @@ if __name__ == "__main__":
         description="Process chess game videos to generate PGNs."
     )
     parser.add_argument(
-        "--video-paths",
+        "--video-inputs",
         required=True,
         nargs="+",
-        help="Paths to the video files.",
+        help="Paths to video files or directories containing video files.",
     )
     parser.add_argument(
         "--model-path",
@@ -96,7 +96,16 @@ if __name__ == "__main__":
     all_pgns = []
     filenames = []
 
-    for video_path in args.video_paths:
+    video_files = []
+    for video_input in args.video_inputs:
+        if os.path.isdir(video_input):
+            for filename in os.listdir(video_input):
+                if filename.lower().endswith((".mp4", ".mov", ".avi", ".mkv")):
+                    video_files.append(os.path.join(video_input, filename))
+        else:
+            video_files.append(video_input)
+
+    for video_path in video_files:
         pgn = process_video(video_path, args.model_path, args.results_dir)
         all_pgns.append(pgn if pgn else "")
         filenames.append(os.path.basename(video_path))

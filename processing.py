@@ -256,18 +256,19 @@ def generate_pgn(history: list[str], legal_moves: list[tuple[chess.Move, bool]])
     if not legal_moves:
         return ""
 
-    ini_move, ini_turn = legal_moves[0]
-    board_ini = chess.Board(history[0])
-    board_ini.turn = ini_turn
-    pgn_string = board_ini.variation_san([ move for (move, _) in legal_moves])
-    print("board.variation_san success")
-    pgn_string = ""
+    
     try:
+        ini_move, ini_turn = legal_moves[0]
+        board_ini = chess.Board(history[0])
+        board_ini.turn = ini_turn
         pgn_string = board_ini.variation_san([ move for (move, _) in legal_moves])
         pgn_string = pgn_string.replace("...", "... ") # if black move first
         print("board.variation_san success")
-    except chess.IllegalMoveError:
-        print("boarc.variation_san errors: fallback to my method")
+    except chess.IllegalMoveError as e:
+        print(f"boarc.variation_san errors: {e}")
+        ini_move, ini_turn = legal_moves[0]
+        board_ini = chess.Board(history[0])
+        board_ini.turn = ini_turn
         n_move = 0
         if not ini_turn:  # Black moves first
             legal_moves.pop(0)
