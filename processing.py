@@ -1,5 +1,5 @@
 import os
-
+import sys
 import chess
 import cv2
 import joblib
@@ -57,7 +57,7 @@ def get_board_from_video(video_path: str, cache_path: str) -> ChessBoard | None:
 
 
 def generate_fen_history(
-    video_path: str, board: ChessBoard, cache_path: str, model_path: str, output_path: str | None = None,
+    video_path: str, board: ChessBoard, cache_path: str, model_path: str, output_path: str | None = None, print_ascii=False
 ) -> list[str]:
     """
     Generates a history of board states in FEN format from a video.
@@ -129,16 +129,23 @@ def generate_fen_history(
             ):
                 board_perceptor.add_frame_observation(board_idx)
             else:
-                print(f"Invalid board state: {board_curr.status()}")
+                # print(f"Invalid board state: {board_curr.status()}")
+                pass
 
             stable_grid, is_stable = board_perceptor.get_stable_board()
 
             if stable_grid is not None and is_stable:
                 fen_string = chess_pieces_detector.board_to_fen(stable_grid, board)
                 history.append(fen_string)
-                print(f"frame: {i}/{total_frames} (stable)")
+                board_str = str(board_curr) if print_ascii else board_curr.unicode()
+                output_block = f"Frame: {i}/{total_frames}\n" + board_str
+                print(output_block)
+                line_count = output_block.count('\n') + 1
+                sys.stdout.write(f"\033[{line_count}A") # Move cursor up 'line_count' times
+                sys.stdout.flush()
         # Optional: display frame for debugging
-        cv2.imshow("frame", draw_frame)
+        # cv2.imshow("frame", draw_frame)
+        
         if out is not None:
             out.write(draw_frame)
         if cv2.waitKey(1) == ord("q"):

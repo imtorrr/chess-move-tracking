@@ -4,7 +4,7 @@ import pandas as pd
 
 
 def process_video(
-    video_path: str, model_path: str, results_dir: str = "results"
+    video_path: str, model_path: str, results_dir: str = "results", print_ascii=False
 ) -> str | None:
     """
     Processes a single video to extract chess moves and generate a PGN string.
@@ -49,6 +49,7 @@ def process_video(
         cache_history_path,
         model_path,
         output_path=video_output_path,
+        print_ascii=print_ascii
     )
     if not history:
         print(f"Could not generate FEN history for {video_path}. Skipping.")
@@ -90,9 +91,14 @@ if __name__ == "__main__":
         default="results",
         help="Directory to save annotated videos.",
     )
+    parser.add_argument(
+        "--ascii",
+        action="store_true",
+        help="StdOut to console with ascii characters.",
+    )
 
     args = parser.parse_args()
-
+    
     all_pgns = []
     filenames = []
 
@@ -106,7 +112,7 @@ if __name__ == "__main__":
             video_files.append(video_input)
 
     for video_path in video_files:
-        pgn = process_video(video_path, args.model_path, args.results_dir)
+        pgn = process_video(video_path, args.model_path, args.results_dir, print_ascii=args.ascii)
         all_pgns.append(pgn if pgn else "")
         filenames.append(os.path.basename(video_path))
 
