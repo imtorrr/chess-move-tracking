@@ -7,13 +7,11 @@ requires-python = ">=3.12"
 dependencies = [
     "easyocr>=1.7.2",
     "ipykernel>=7.1.0",
-    "lap>=0.5.12",
     "pandas>=2.3.3",
     "scikit-learn>=1.7.2",
     "tqdm>=4.67.1",
     "ultralytics>=8.3.217",
     "python-chess>=1.999",
-    "labelimg>=1.8.6",
     "albumentations>=2.0.8",
     "gdown",
     "tensorboard",

@@ -15,7 +15,8 @@ wheels/
 # Data, models, and outputs
 data/
 training_data/
-result/
+results/
+!results/outputs.csv
 stubs/
 notebooks/
 *.pt
