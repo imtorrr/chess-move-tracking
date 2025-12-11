@@ -12,6 +12,8 @@ The core of this project is a pipeline that transforms video frames into a struc
 4.  **Move Derivation**: By comparing consecutive FEN strings, the system identifies the moves made during the game.
 5.  **PGN Generation**: The sequence of identified moves is cleaned and compiled into a final Portable Game Notation (PGN) file, which can be used in any standard chess software.
 
+This repository contains the source code for Team XYZ, which participated in the CU Chess Detection 2025 Kaggle competition. The competition has concluded, and the leaderboard can be viewed here: https://www.kaggle.com/competitions/cu-chess-detection-2025/leaderboard.
+
 ![Chessboard Detection](https://via.placeholder.com/600x400.png?text=Replace+with+your+image+of+chessboard+detection)
 
 ## Installation
@@ -37,9 +39,7 @@ This project uses `uv` for package management and specifies the Python version.
 1.  **Download Data and Models**: The project requires pre-trained models and sample videos. Use the provided scripts to download them.
 
     ```bash
-    bash scripts/download_chess-pieces.sh
-    bash scripts/download_video_labelled.sh
-    bash scripts/download_xcorners.sh
+    bash scripts/download_videos.sh
     ```
 
 2.  **Run Processing**: To run the move tracking on the sample videos, execute the `main.py` script.
@@ -53,6 +53,10 @@ This project uses `uv` for package management and specifies the Python version.
 3.  **(Optional) Train the Model**: You can re-train the YOLO model using the provided training script.
 
     ```bash
+    bash scripts/download_chess-pieces.sh
+    bash scripts/download_video_labelled.sh
+    bash scripts/download_xcorners.sh
+
     bash scripts/train.sh
     ```
     The training results will be saved in the `runs/detect/` directory.
